@@ -63,6 +63,7 @@ User: "Deploy op-bridge to the server"
 | `op-bridge get <name>` | Read a secret from the daemon |
 | `op-bridge set <name> <uri> <value>` | Write secret to memory + 1Password |
 | `op-bridge delete <name>` | Remove secret from memory only |
+| `op-bridge refresh` | Re-resolve all secrets from 1Password |
 | `op-bridge list` | List all secret reference names |
 | `op-bridge ping` | Check if daemon is alive |
 

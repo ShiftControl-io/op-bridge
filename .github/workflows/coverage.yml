@@ -1,16 +1,13 @@
 name: Coverage
 
 on:
-  push:
-    branches: [main]
-    paths: ['**/*.rs', 'Cargo.toml', 'Cargo.lock']
   pull_request:
     branches: [main]
     paths: ['**/*.rs', 'Cargo.toml', 'Cargo.lock']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: true
 
 permissions:
   pull-requests: write
@@ -37,41 +34,27 @@ jobs:
         with:
           key: coverage
 
-      - name: Generate coverage report
+      - name: Generate coverage
         run: |
           cargo llvm-cov --all-features --workspace --text 2>&1 | tee coverage-report.txt
           cargo llvm-cov --all-features --workspace --text --summary-only 2>&1 | tee coverage-summary.txt
 
       - name: Comment coverage on PR
-        if: github.event_name == 'pull_request'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const fs = require('fs');
             const summary = fs.readFileSync('coverage-summary.txt', 'utf8');
+            const report = fs.readFileSync('coverage-report.txt', 'utf8');
 
-            const body = `## Code Coverage
+            const body = `## Code Coverage\n\n\`\`\`\n${summary}\n\`\`\`\n\n<details>\n<summary>Full report</summary>\n\n\`\`\`\n${report}\n\`\`\`\n\n</details>`;
 
-            \`\`\`
-            ${summary}
-            \`\`\`
-
-            <details>
-            <summary>Full coverage report</summary>
-
-            \`\`\`
-            ${fs.readFileSync('coverage-report.txt', 'utf8')}
-            \`\`\`
-
-            </details>`;
-
-            // Find existing coverage comment
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-            const existing = comments.find(c => c.body.startsWith('## Code Coverage'));
+            const existing = comments.find(c => c.body?.startsWith('## Code Coverage'));
 
             if (existing) {
               await github.rest.issues.updateComment({

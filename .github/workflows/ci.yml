@@ -113,6 +113,67 @@ jobs:
       - name: cargo test
         run: cargo test --verbose
 
+  coverage-badge:
+    name: Update Coverage Badge
+    needs: [lint, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@a37010ded18ff788be4440302bd6830b1ae50d8b # cargo-llvm-cov
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db # v2
+        with:
+          key: coverage-badge
+
+      - name: Generate coverage
+        run: |
+          cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+          TOTAL_LF=$(grep '^LF:' lcov.info | cut -d: -f2 | awk '{s+=$1} END {print s}')
+          TOTAL_LH=$(grep '^LH:' lcov.info | cut -d: -f2 | awk '{s+=$1} END {print s}')
+          if [ "$TOTAL_LF" -eq 0 ]; then
+            PERCENT=0
+          else
+            PERCENT=$(echo "scale=1; $TOTAL_LH * 100 / $TOTAL_LF" | bc)
+          fi
+          echo "COVERAGE_PERCENT=$PERCENT" >> $GITHUB_ENV
+          echo "Coverage: $PERCENT%"
+
+      - name: Update coverage badge gist
+        env:
+          GIST_ID: ${{ secrets.GIST_ID }}
+          CODECOV_GIST_TOKEN: ${{ secrets.CODECOV_GIST_TOKEN }}
+        run: |
+          if [ -z "$GIST_ID" ] || [ -z "$CODECOV_GIST_TOKEN" ]; then
+            echo "GIST_ID or CODECOV_GIST_TOKEN not set, skipping badge update"
+            exit 0
+          fi
+
+          COLOR="brightgreen"
+          if (( $(echo "$COVERAGE_PERCENT < 50" | bc -l) )); then
+            COLOR="red"
+          elif (( $(echo "$COVERAGE_PERCENT < 80" | bc -l) )); then
+            COLOR="yellow"
+          fi
+
+          JSON_DATA=$(printf '{"schemaVersion": 1, "label": "test coverage", "message": "%.1f%%", "color": "%s"}' "$COVERAGE_PERCENT" "$COLOR")
+
+          curl -s -X PATCH \
+            -H "Authorization: token $CODECOV_GIST_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"files\": {\"op_bridge_coverage.json\": {\"content\": $(echo "$JSON_DATA" | jq -R .)}}}" \
+            "https://api.github.com/gists/$GIST_ID"
+
   audit:
     name: Security Audit
     needs: changes
