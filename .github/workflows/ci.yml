@@ -3,7 +3,6 @@ name: CI
 on:
   push:
     branches: [main]
-    paths: ['**/*.rs', 'Cargo.toml', 'Cargo.lock', '.cargo/**']
   pull_request:
     branches: [main]
 
