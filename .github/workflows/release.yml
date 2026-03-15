@@ -35,6 +35,14 @@ jobs:
             cross_packages: musl-tools gcc-aarch64-linux-gnu
             linker: aarch64-linux-gnu-gcc
 
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            artifact: op-bridge-macos-arm64
+
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+            artifact: op-bridge-macos-amd64
+
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -50,6 +58,7 @@ jobs:
           cache-targets: "false"
 
       - name: Install cross-compilation tools
+        if: matrix.cross_packages
         run: sudo apt-get update && sudo apt-get install -y ${{ matrix.cross_packages }}
 
       - name: Set cross-linker
@@ -121,6 +130,8 @@ jobs:
           |----------|--------|--------|
           | Linux x86_64 (amd64) | \`op-bridge-linux-amd64.tar.gz\` | See \`.sha256\` file |
           | Linux aarch64 (arm64) | \`op-bridge-linux-arm64.tar.gz\` | See \`.sha256\` file |
+          | macOS Apple Silicon (arm64) | \`op-bridge-macos-arm64.tar.gz\` | See \`.sha256\` file |
+          | macOS Intel (amd64) | \`op-bridge-macos-amd64.tar.gz\` | See \`.sha256\` file |
 
           ### Installation
 
