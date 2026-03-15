@@ -1,20 +1,18 @@
 name: Coverage
 
+# Only runs after merge to main — updates the coverage badge gist.
+# PR coverage is visible in the CI workflow's test output.
 on:
-  pull_request:
+  push:
     branches: [main]
     paths: ['**/*.rs', 'Cargo.toml', 'Cargo.lock']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  pull-requests: write
 
 jobs:
   coverage:
-    name: Code Coverage
+    name: Update Coverage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -34,40 +32,38 @@ jobs:
         with:
           key: coverage
 
-      - name: Generate coverage
+      - name: Generate coverage and update badge
+        env:
+          GIST_ID: ${{ secrets.GIST_ID }}
+          CODECOV_GIST_TOKEN: ${{ secrets.CODECOV_GIST_TOKEN }}
         run: |
-          cargo llvm-cov --all-features --workspace --text 2>&1 | tee coverage-report.txt
-          cargo llvm-cov --all-features --workspace --text --summary-only 2>&1 | tee coverage-summary.txt
+          cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
 
-      - name: Comment coverage on PR
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
-        with:
-          script: |
-            const fs = require('fs');
-            const summary = fs.readFileSync('coverage-summary.txt', 'utf8');
-            const report = fs.readFileSync('coverage-report.txt', 'utf8');
+          TOTAL_LF=$(grep '^LF:' lcov.info | cut -d: -f2 | awk '{s+=$1} END {print s}')
+          TOTAL_LH=$(grep '^LH:' lcov.info | cut -d: -f2 | awk '{s+=$1} END {print s}')
+          if [ "$TOTAL_LF" -eq 0 ]; then
+            PERCENT=0
+          else
+            PERCENT=$(echo "scale=1; $TOTAL_LH * 100 / $TOTAL_LF" | bc)
+          fi
+          echo "Coverage: $PERCENT%"
 
-            const body = `## Code Coverage\n\n\`\`\`\n${summary}\n\`\`\`\n\n<details>\n<summary>Full report</summary>\n\n\`\`\`\n${report}\n\`\`\`\n\n</details>`;
+          if [ -z "$GIST_ID" ] || [ -z "$CODECOV_GIST_TOKEN" ]; then
+            echo "GIST_ID or CODECOV_GIST_TOKEN not set, skipping badge update"
+            exit 0
+          fi
 
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const existing = comments.find(c => c.body?.startsWith('## Code Coverage'));
+          COLOR="brightgreen"
+          if (( $(echo "$PERCENT < 50" | bc -l) )); then
+            COLOR="red"
+          elif (( $(echo "$PERCENT < 80" | bc -l) )); then
+            COLOR="yellow"
+          fi
 
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
+          JSON_DATA=$(printf '{"schemaVersion": 1, "label": "test coverage", "message": "%.1f%%", "color": "%s"}' "$PERCENT" "$COLOR")
+
+          curl -s -X PATCH \
+            -H "Authorization: token $CODECOV_GIST_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"files\": {\"op_bridge_coverage.json\": {\"content\": $(echo "$JSON_DATA" | jq -R .)}}}" \
+            "https://api.github.com/gists/$GIST_ID"
