@@ -1,0 +1,46 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement! Please describe what you'd like.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What problem does this feature solve? What's the use case?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like this to work?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds or alternatives have you considered?
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - CLI (new subcommand or flag)
+        - Daemon (socket protocol)
+        - File watcher
+        - Security
+        - Documentation
+        - CI/Build
+        - Other
+    validations:
+      required: true
