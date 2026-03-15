@@ -293,11 +293,17 @@ async fn run_daemon(
                 info!("SIGHUP received, re-resolving secrets...");
                 let mut temp = store::SecretStore::new();
                 let (ok, fail) = resolver::resolve_all(&refs, &mut temp).await;
-                {
+                if fail == 0 {
+                    // All secrets resolved — safe to swap
                     let mut s = store.write().await;
                     s.replace_with(temp);
+                    info!("re-resolved {ok} secret(s)");
+                } else {
+                    // Partial failure — merge successes, keep stale values for failures
+                    let mut s = store.write().await;
+                    s.merge_from(temp);
+                    info!("re-resolved {ok} secret(s), {fail} failed (kept stale values for failures)");
                 }
-                info!("re-resolved {ok} secret(s), {fail} failed");
             }
 
             _ = sigterm.recv() => {

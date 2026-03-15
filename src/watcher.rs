@@ -2,8 +2,8 @@
 //!
 //! When enabled via `--watch` flags on the daemon, this module monitors
 //! specified files for changes and automatically writes their contents back
-//! to 1Password. Designed for OpenClaw containers where Claude Code OAuth
-//! tokens get refreshed and need to be persisted.
+//! to 1Password. Designed for agent containers where OAuth tokens or other
+//! credentials get refreshed at runtime and need to be persisted.
 //!
 //! ## Watch spec format
 //!
@@ -132,6 +132,25 @@ pub async fn start_watchers(
                         path.display(),
                         entry.uri
                     );
+                    // Check file size before reading (prevent OOM from large files)
+                    const MAX_FILE_SIZE: u64 = 1_048_576; // 1 MB
+                    match tokio::fs::metadata(path).await {
+                        Ok(meta) if meta.len() > MAX_FILE_SIZE => {
+                            error!(
+                                "file {} is too large ({} bytes, max {}), skipping write-back",
+                                path.display(),
+                                meta.len(),
+                                MAX_FILE_SIZE
+                            );
+                            continue;
+                        }
+                        Err(e) => {
+                            error!("failed to stat {}: {}", path.display(), e);
+                            continue;
+                        }
+                        _ => {}
+                    }
+
                     match tokio::fs::read_to_string(path).await {
                         Ok(contents) => {
                             let value = contents.trim().to_string();

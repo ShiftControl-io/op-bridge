@@ -111,10 +111,20 @@ impl SecretStore {
 
     /// Atomically replaces the entire store contents with `other`.
     ///
-    /// Used by the SIGHUP refresh path to minimize write-lock hold time:
-    /// secrets are resolved into a temporary store, then swapped in with a
-    /// single assignment (microseconds vs. seconds of resolution time).
+    /// Used by the SIGHUP refresh path when all secrets resolve successfully.
     pub fn replace_with(&mut self, other: SecretStore) {
         self.entries = other.entries;
+    }
+
+    /// Merges successfully-resolved secrets from `other` into this store.
+    ///
+    /// Secrets present in `other` overwrite existing entries. Secrets NOT in
+    /// `other` (i.e., those that failed to re-resolve) are kept at their
+    /// previous stale values. This prevents a transient 1Password outage
+    /// from wiping the in-memory cache of working secrets.
+    pub fn merge_from(&mut self, other: SecretStore) {
+        for (name, entry) in other.entries {
+            self.entries.insert(name, entry);
+        }
     }
 }
