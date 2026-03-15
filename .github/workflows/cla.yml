@@ -23,7 +23,7 @@ jobs:
         with:
           path-to-signatures: 'signatures/version1/cla.json'
           path-to-document: 'https://github.com/ShiftControl-io/op-bridge/blob/main/CLA.md'
-          branch: 'main'
+          branch: 'cla-signatures'
           allowlist: 'shiftcontrol-dan,dependabot[bot],github-actions[bot]'
           remote-organization-name: 'ShiftControl-io'
           remote-repository-name: 'op-bridge'
