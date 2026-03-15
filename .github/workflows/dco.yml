@@ -9,5 +9,31 @@ jobs:
     name: DCO Check
     runs-on: ubuntu-latest
     steps:
-      - name: Check DCO
-        uses: githubtools/dco-action@54f0e7ddf52cedb3b1e7acbe66e6a17ed49e5305 # v3
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Check Signed-off-by
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          FAILED=0
+          for SHA in $(git rev-list "$BASE_SHA".."$HEAD_SHA"); do
+            if ! git log -1 --format='%B' "$SHA" | grep -q '^Signed-off-by: .* <.*>'; then
+              echo "::error::Commit $SHA is missing 'Signed-off-by' line. Use 'git commit -s' to sign off."
+              FAILED=1
+            fi
+          done
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo ""
+            echo "All commits must include a Signed-off-by line certifying the"
+            echo "Developer Certificate of Origin (https://developercertificate.org/)."
+            echo ""
+            echo "To fix: git rebase --signoff HEAD~N  (where N = number of commits)"
+            exit 1
+          fi
+
+          echo "All commits have Signed-off-by lines."
