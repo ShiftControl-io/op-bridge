@@ -127,7 +127,7 @@ async fn handle_set(line: &str, store: &Arc<RwLock<SecretStore>>) -> String {
 
     let mut parts = rest.splitn(3, ' ');
     let name = match parts.next() {
-        Some(n) if !n.is_empty() => n,
+        Some(n) if !n.is_empty() => n.to_ascii_uppercase(),
         _ => return "ERR SET requires: <name> <op://uri> <value>\n".to_string(),
     };
     let uri = match parts.next() {
@@ -140,19 +140,19 @@ async fn handle_set(line: &str, store: &Arc<RwLock<SecretStore>>) -> String {
     };
 
     if let Err(e) = resolver::op_write(uri, value).await {
-        error!("SET write-back failed for {name}: {e}");
+        error!("SET write-back failed for {}: {e}", name);
         return format!("ERR write-back failed: {e}\n");
     }
 
     {
         let mut s = store.write().await;
         s.insert_with_uri(
-            name.to_string(),
+            name.clone(),
             secrecy::SecretString::from(value.to_string()),
             uri.to_string(),
         );
     }
 
-    info!("SET {name} -> {uri} ({} chars)", value.len());
+    info!("SET {} -> {uri} ({} chars)", name, value.len());
     "OK\n".to_string()
 }
