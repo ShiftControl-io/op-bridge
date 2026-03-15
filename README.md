@@ -1,5 +1,9 @@
 # op-bridge
 
+[![CI](https://github.com/ShiftControl-io/op-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/ShiftControl-io/op-bridge/actions/workflows/ci.yml)
+[![Test Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/shiftcontrol-dan/efc94b81793e102c4e4318580bda039e/raw/op_bridge_coverage.json)](#)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Lightweight 1Password secret broker daemon for Docker containers. Resolves secrets once at startup, holds them in memory (mlock'd, zeroized on drop), and serves them via Unix socket. Supports read and write-back to 1Password, plus file watching for credential auto-sync.
 
 ## Why

@@ -45,9 +45,10 @@ pub fn discover_refs(prefix: &str, suffix: &str) -> Vec<SecretRef> {
         if key.starts_with(prefix) && key.ends_with(suffix) && value.starts_with("op://") {
             let name = &key[prefix.len()..key.len() - suffix.len()];
             if !name.is_empty() {
-                info!("found ref: {} -> {}", name, value);
+                let canonical = name.to_ascii_uppercase();
+                info!("found ref: {} -> {}", canonical, value);
                 refs.push(SecretRef {
-                    name: name.to_string(),
+                    name: canonical,
                     uri: value,
                 });
             }

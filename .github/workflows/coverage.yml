@@ -1,20 +1,18 @@
 name: Coverage
 
+# Only runs after merge to main — updates the coverage badge gist.
+# PR coverage is visible in the CI workflow's test output.
 on:
   push:
-    branches: [main]
-    paths: ['**/*.rs', 'Cargo.toml', 'Cargo.lock']
-  pull_request:
     branches: [main]
     paths: ['**/*.rs', 'Cargo.toml', 'Cargo.lock']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   coverage:
-    name: Code Coverage
+    name: Update Coverage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -34,12 +32,38 @@ jobs:
         with:
           key: coverage
 
-      - name: Generate coverage
-        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+      - name: Generate coverage and update badge
+        env:
+          GIST_ID: ${{ secrets.GIST_ID }}
+          CODECOV_GIST_TOKEN: ${{ secrets.CODECOV_GIST_TOKEN }}
+        run: |
+          cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
-        with:
-          files: lcov.info
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
+          TOTAL_LF=$(grep '^LF:' lcov.info | cut -d: -f2 | awk '{s+=$1} END {print s}')
+          TOTAL_LH=$(grep '^LH:' lcov.info | cut -d: -f2 | awk '{s+=$1} END {print s}')
+          if [ "$TOTAL_LF" -eq 0 ]; then
+            PERCENT=0
+          else
+            PERCENT=$(echo "scale=1; $TOTAL_LH * 100 / $TOTAL_LF" | bc)
+          fi
+          echo "Coverage: $PERCENT%"
+
+          if [ -z "$GIST_ID" ] || [ -z "$CODECOV_GIST_TOKEN" ]; then
+            echo "GIST_ID or CODECOV_GIST_TOKEN not set, skipping badge update"
+            exit 0
+          fi
+
+          COLOR="brightgreen"
+          if (( $(echo "$PERCENT < 50" | bc -l) )); then
+            COLOR="red"
+          elif (( $(echo "$PERCENT < 80" | bc -l) )); then
+            COLOR="yellow"
+          fi
+
+          JSON_DATA=$(printf '{"schemaVersion": 1, "label": "test coverage", "message": "%.1f%%", "color": "%s"}' "$PERCENT" "$COLOR")
+
+          curl -s -X PATCH \
+            -H "Authorization: token $CODECOV_GIST_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"files\": {\"op_bridge_coverage.json\": {\"content\": $(echo "$JSON_DATA" | jq -R .)}}}" \
+            "https://api.github.com/gists/$GIST_ID"

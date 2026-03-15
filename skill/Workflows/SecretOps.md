@@ -1,6 +1,6 @@
 # SecretOps
 
-Read, write, delete, or list secrets via the op-bridge daemon.
+Read, write, delete, refresh, or list secrets via the op-bridge daemon.
 
 ## Prerequisites
 
@@ -39,6 +39,14 @@ This writes to 1Password first, then updates the in-memory store. If the 1Passwo
 ```
 
 Removes the secret from the in-memory store and zeroizes it. Does **NOT** delete anything from 1Password. Use this to revoke runtime access to a secret without affecting the source of truth.
+
+### REFRESH — Re-resolve all secrets from 1Password
+
+```bash
+~/op-bridge/target/debug/op-bridge refresh
+```
+
+Sends SIGHUP to the daemon, which re-resolves all `OP_*_REF` secrets from 1Password. Useful after rotating credentials upstream. The daemon reads its PID from the PID file (default: `/tmp/op-bridge.pid`).
 
 ### LIST — Show all loaded secret names
 

@@ -14,6 +14,7 @@
 //! | `SET <name> <op://uri> <value>` | `OK` or `ERR <message>` |
 //! | `DELETE <name>` | `OK` or `ERR unknown ref: <name>` |
 
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -28,11 +29,17 @@ use crate::{resolver, store::SecretStore};
 /// If a socket file already exists at `path` (e.g., from a previous unclean
 /// shutdown), it is removed before binding. This avoids "address already in use"
 /// errors on restart.
+///
+/// The socket is created with `0600` permissions (owner read/write only),
+/// preventing other local users from connecting and reading secrets.
 pub async fn bind(path: &Path) -> std::io::Result<UnixListener> {
     if path.exists() {
         std::fs::remove_file(path)?;
     }
-    UnixListener::bind(path)
+    let listener = UnixListener::bind(path)?;
+    // Restrict socket to owner-only access (prevents other local users from reading secrets)
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    Ok(listener)
 }
 
 /// Handles a single client connection, processing commands until EOF.
@@ -56,7 +63,11 @@ pub async fn handle_client(
 
     while let Some(raw) = lines.next_line().await? {
         let line = raw.trim();
-        trace!("raw request: {line}");
+        // Log command name at trace level — never log full line (SET contains secrets)
+        trace!(
+            cmd = line.split_whitespace().next().unwrap_or(""),
+            "raw request"
+        );
         if line.is_empty() {
             continue;
         }
@@ -90,10 +101,15 @@ pub async fn handle_client(
             format!("ERR unknown command: {line}\n")
         };
 
+        // Log command name only — never log response content (may contain secrets)
         debug!(
-            "request: {} -> {}",
-            line.split_whitespace().next().unwrap_or(""),
-            response.trim()
+            cmd = line.split_whitespace().next().unwrap_or(""),
+            status = if response.starts_with("OK") {
+                "OK"
+            } else {
+                "ERR"
+            },
+            "request handled"
         );
         writer.write_all(response.as_bytes()).await?;
     }
