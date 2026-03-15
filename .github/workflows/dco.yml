@@ -1,0 +1,13 @@
+name: DCO
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  dco:
+    name: DCO Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check DCO
+        uses: githubtools/dco-action@54f0e7ddf52cedb3b1e7acbe66e6a17ed49e5305 # v3
