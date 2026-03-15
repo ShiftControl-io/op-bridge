@@ -12,6 +12,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+permissions:
+  pull-requests: write
+
 jobs:
   coverage:
     name: Code Coverage
@@ -34,12 +37,54 @@ jobs:
         with:
           key: coverage
 
-      - name: Generate coverage
-        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+      - name: Generate coverage report
+        run: |
+          cargo llvm-cov --all-features --workspace --text 2>&1 | tee coverage-report.txt
+          cargo llvm-cov --all-features --workspace --text --summary-only 2>&1 | tee coverage-summary.txt
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
-          files: lcov.info
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('coverage-summary.txt', 'utf8');
+
+            const body = `## Code Coverage
+
+            \`\`\`
+            ${summary}
+            \`\`\`
+
+            <details>
+            <summary>Full coverage report</summary>
+
+            \`\`\`
+            ${fs.readFileSync('coverage-report.txt', 'utf8')}
+            \`\`\`
+
+            </details>`;
+
+            // Find existing coverage comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.startsWith('## Code Coverage'));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

@@ -9,8 +9,31 @@ Thank you for your interest in contributing to op-bridge! This document provides
 3. Create a feature branch: `git checkout -b my-feature`
 4. Make your changes
 5. Run the CI checks locally (see below)
-6. Commit and push
+6. Commit with a **signed commit** (see below) and push
 7. Open a pull request
+8. Sign the CLA on your first PR (one-time, comment on the PR)
+
+## Commit Signing (Required)
+
+All commits must be cryptographically signed. This is enforced by branch protection rules on all branches. Since op-bridge is a security tool, we require provenance verification for every contribution.
+
+### SSH signing (recommended — simplest)
+
+```bash
+# Configure git to use your SSH key for signing
+git config --global gpg.format ssh
+git config --global user.signingkey ~/.ssh/id_ed25519  # or your key path
+git config --global commit.gpgsign true
+```
+
+### GPG signing
+
+```bash
+git config --global commit.gpgsign true
+git config --global user.signingkey <YOUR_GPG_KEY_ID>
+```
+
+If you haven't set up commit signing before, GitHub has a good guide: [Signing commits](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits).
 
 ## Development Setup
 
