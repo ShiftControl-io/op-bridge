@@ -185,14 +185,18 @@ pub async fn op_write(uri: &str, value: &str) -> Result<(), String> {
     // The op CLI returns: `"<item>" isn't an item in the "<vault>" vault.`
     if !stderr_trimmed.contains(OP_ITEM_NOT_FOUND_MARKER) {
         assignment.zeroize();
-        return Err(format!("op item edit failed ({}): {}", output.status, stderr_trimmed));
+        return Err(format!(
+            "op item edit failed ({}): {}",
+            output.status, stderr_trimmed
+        ));
     }
 
     info!("item not found in 1Password, creating: {item} in vault {vault}");
 
     let create_output = tokio::process::Command::new("op")
         .args([
-            "item", "create",
+            "item",
+            "create",
             "--category=password",
             &format!("--title={item}"),
             &format!("--vault={vault}"),
