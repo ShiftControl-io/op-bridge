@@ -75,11 +75,7 @@ pub async fn resolve_all(refs: &[SecretRef], store: &mut SecretStore) -> (usize,
         match op_read(&r.uri).await {
             Ok(value) => {
                 store.insert_with_uri(r.name.clone(), value, r.uri.clone());
-                info!(
-                    "resolved {} ({} chars)",
-                    r.name,
-                    store.get(&r.name).map_or(0, |v| v.len())
-                );
+                info!("resolved {}", r.name);
                 ok += 1;
             }
             Err(e) => {
@@ -145,7 +141,7 @@ pub async fn op_read(uri: &str) -> Result<SecretString, String> {
 /// Returns a descriptive error string if the URI is malformed, the `op` binary
 /// cannot be executed, or `op item edit` exits with a non-zero status.
 pub async fn op_write(uri: &str, value: &str) -> Result<(), String> {
-    debug!("op item edit for {uri} ({} chars)", value.len());
+    debug!("op item edit for {uri}");
     let parts: Vec<&str> = uri
         .strip_prefix("op://")
         .ok_or_else(|| format!("invalid op:// URI: {uri}"))?
