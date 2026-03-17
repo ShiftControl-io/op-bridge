@@ -7,8 +7,13 @@
 
 use secrecy::SecretString;
 use tracing::{debug, error, info, trace};
+use zeroize::Zeroize;
 
 use crate::store::SecretStore;
+
+/// Substring the `op` CLI includes in stderr when an item doesn't exist in a vault.
+/// Used to distinguish "not found" from other edit failures (auth, network, etc.).
+const OP_ITEM_NOT_FOUND_MARKER: &str = "isn't an item";
 
 /// A discovered secret reference mapping an environment variable name to an
 /// `op://` URI.
@@ -75,11 +80,7 @@ pub async fn resolve_all(refs: &[SecretRef], store: &mut SecretStore) -> (usize,
         match op_read(&r.uri).await {
             Ok(value) => {
                 store.insert_with_uri(r.name.clone(), value, r.uri.clone());
-                info!(
-                    "resolved {} ({} chars)",
-                    r.name,
-                    store.get(&r.name).map_or(0, |v| v.len())
-                );
+                info!("resolved {}", r.name);
                 ok += 1;
             }
             Err(e) => {
@@ -126,26 +127,32 @@ pub async fn op_read(uri: &str) -> Result<SecretString, String> {
     Ok(SecretString::from(value.trim_end_matches('\n').to_string()))
 }
 
-/// Writes a secret value to 1Password by invoking `op item edit`.
+/// Writes a secret value to 1Password, creating the item if it doesn't exist.
 ///
-/// The `uri` must be in `op://vault/item/field` format. This function parses
-/// the URI into its components and runs:
+/// The `uri` must be in `op://vault/item/field` format. This function first
+/// attempts to update the existing item via `op item edit`. If the item does
+/// not exist (detected by the `"isn't an item"` error from the `op` CLI),
+/// it falls back to creating a new item via `op item create`.
 ///
 /// ```text
+/// # Update existing:
 /// op item edit <item> <field>=<value> --vault <vault>
+///
+/// # Create new (fallback):
+/// op item create --category=password --title=<item> --vault=<vault> <field>=<value>
 /// ```
 ///
 /// # Safety boundary
 ///
-/// This function can **update** existing 1Password fields but cannot create
-/// or delete items. The security boundary matches the `op` CLI itself.
+/// This function can **update** existing 1Password fields and **create** new
+/// items. It cannot delete items. The security boundary matches the `op` CLI.
 ///
 /// # Errors
 ///
 /// Returns a descriptive error string if the URI is malformed, the `op` binary
-/// cannot be executed, or `op item edit` exits with a non-zero status.
+/// cannot be executed, or both edit and create fail.
 pub async fn op_write(uri: &str, value: &str) -> Result<(), String> {
-    debug!("op item edit for {uri} ({} chars)", value.len());
+    debug!("op write for {uri}");
     let parts: Vec<&str> = uri
         .strip_prefix("op://")
         .ok_or_else(|| format!("invalid op:// URI: {uri}"))?
@@ -157,20 +164,56 @@ pub async fn op_write(uri: &str, value: &str) -> Result<(), String> {
     }
 
     let (vault, item, field) = (parts[0], parts[1], parts[2]);
-    let assignment = format!("{field}={value}");
+    let mut assignment = format!("{field}={value}");
 
+    // Try editing the existing item first.
     let output = tokio::process::Command::new("op")
         .args(["item", "edit", item, &assignment, "--vault", vault])
         .output()
         .await
         .map_err(|e| format!("failed to execute op: {e}"))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+    if output.status.success() {
+        assignment.zeroize();
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stderr_trimmed = stderr.trim();
+
+    // Only fall back to create when the item genuinely doesn't exist.
+    // The op CLI returns: `"<item>" isn't an item in the "<vault>" vault.`
+    if !stderr_trimmed.contains(OP_ITEM_NOT_FOUND_MARKER) {
+        assignment.zeroize();
         return Err(format!(
             "op item edit failed ({}): {}",
-            output.status,
-            stderr.trim()
+            output.status, stderr_trimmed
+        ));
+    }
+
+    info!("item not found in 1Password, creating: {item} in vault {vault}");
+
+    let create_output = tokio::process::Command::new("op")
+        .args([
+            "item",
+            "create",
+            "--category=password",
+            &format!("--title={item}"),
+            &format!("--vault={vault}"),
+            &assignment,
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("failed to execute op: {e}"))?;
+
+    assignment.zeroize();
+
+    if !create_output.status.success() {
+        let create_stderr = String::from_utf8_lossy(&create_output.stderr);
+        return Err(format!(
+            "op item create failed ({}): {}",
+            create_output.status,
+            create_stderr.trim()
         ));
     }
 

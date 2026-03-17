@@ -153,6 +153,6 @@ async fn handle_set(line: &str, store: &Arc<RwLock<SecretStore>>) -> String {
         );
     }
 
-    info!("SET {} -> {uri} ({} chars)", name, value.len());
+    info!("SET {} -> {uri}", name);
     "OK\n".to_string()
 }

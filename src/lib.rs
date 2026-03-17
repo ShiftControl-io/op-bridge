@@ -11,7 +11,7 @@
 //! ## Modules
 //!
 //! - [`client`] — Unix socket client for querying the daemon from CLI subcommands.
-//! - [`resolver`] — 1Password CLI integration (`op read` / `op item edit`).
+//! - [`resolver`] — 1Password CLI integration (`op read` / `op item edit` / `op item create`).
 //! - [`socket`] — Unix socket server implementing the line-based protocol.
 //! - [`store`] — In-memory secret store with zeroize-on-drop guarantees.
 //! - [`watcher`] — File system watcher for credential auto-sync back to 1Password.
